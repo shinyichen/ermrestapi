@@ -105,6 +105,19 @@ ermrestApp.factory("ErmrestService", ['$http', function($http) {
                 return $q.reject(response.data);
             });
         }
+
+        this.getFilteredRows = function(col, value) {
+            var path = baseUrl + "/entity/" + schemaName + ":" + tableName + "/" + col + "=" + value;
+            return $http.get(path).then(function(response) {
+                var rows = [];
+                for (var i = 0; i < response.data.length; i++) {
+                    rows[i] = new Row(schemaName, tableName, response.data[i]);
+                }
+                return rows;
+            }, function(response) {
+                return $q.reject(response.data);
+            });
+        }
     }
 
     var Row = function(schemaName, tableName, rowData) {
@@ -168,6 +181,14 @@ ermrestApp.controller('ermrestController1', ['ErmrestServiceFactory', function(E
             table.getRows().then(function(rows) {
                 console.log(rows);
             });
+
+            table.getFilteredRows('id', '1').then(function(rows) {
+                console.log(rows);
+            });
+
+            table.getFilteredRows('library_type', 'biotin-labeled cRNA').then(function(rows) {
+                console.log(rows);
+            });
         }
     );
 }]);
@@ -181,6 +202,10 @@ ermrestApp.controller('ermrestController2', ['ErmrestServiceFactory', function(E
             console.log(rows);
         }, function(response) {
             console.log("error loading table2")
+        });
+
+        table.getFilteredRows('id', '1').then(function(rows) {
+            console.log(rows);
         });
     });
 
