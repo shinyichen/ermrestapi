@@ -117,21 +117,65 @@ ermrestApp.factory("ErmrestService", ['$http', function($http) {
 }]);
 
 
+ermrestApp.service("ErmrestServiceFactory", ['$q', 'ErmrestService', function($q, ErmrestService) {
+
+    var ermrestService; // keep single instance for now
+    var loaded = false;
+
+    this.createService = function(ermrestLoc, cid) {
+        ermrestService = new ErmrestService(ermrestLoc, cid);
+        return ermrestService.init().then(function(response) {
+            loaded = true;
+            console.log("service loaded");
+            return ermrestService;
+        }, function(response) {
+            console.log ("error loading service");
+            return ermrestService;
+        });
+    }
+
+    this.getService = function() {
+
+        // wait until ermrestService is loaded
+        return $q(function(resolve, reject) {
+            var check = setInterval(function() {
+                if (loaded) {
+                    clearInterval(check);
+                    resolve(ermrestService);
+                }
+            }, 1000);
+        });
+    }
+
+}]);
 
 
 
 // tester
 
-ermrestApp.controller('ermrestController', ['ErmrestService', function(ErmrestService) {
-    var ermrest = new ErmrestService('https://dev.misd.isi.edu', 2);
-    ermrest.init().then(function(response) {
-        console.log("schemas loaded");
-        var table = ermrest.getTable('assay', 'library');
+ermrestApp.controller('ermrestController1', ['ErmrestServiceFactory', function(ErmrestServiceFactory) {
+    ErmrestServiceFactory.createService('https://dev.misd.isi.edu', 2).then(
+        function(service) {
+            ermrest = service;
+            var table = ermrest.getTable('assay', 'library');
+            table.getRows().then(function(rows) {
+                console.log(rows);
+            });
+        }
+    );
+}]);
+
+ermrestApp.controller('ermrestController2', ['ErmrestServiceFactory', function(ErmrestServiceFactory) {
+    ErmrestServiceFactory.getService().then(function(service) {
+        ermrest = service;
+
+        var table = ermrest.getTable('isa_common', 'species');
         table.getRows().then(function(rows) {
-            //console.log(rows);
+            console.log(rows);
+        }, function(response) {
+            console.log("error loading table2")
         });
-    }, function(response) {
-        console.log("error loading schemas");
     });
 
 }]);
+
