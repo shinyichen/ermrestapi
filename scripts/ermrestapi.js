@@ -96,14 +96,21 @@ ermrestApp.factory("ErmrestService", ['$http', function($http) {
         this.getRows = function() {
             var path = baseUrl + "/entity/" + schemaName + ":" + tableName;
             return $http.get(path).then(function(response) {
-                return response.data; // TODO convert to Row
+                var rows = [];
+                for (var i = 0; i < response.data.length; i++) {
+                    rows[i] = new Row(schemaName, tableName, response.data[i]);
+                }
+                return rows;
             }, function(response) {
                 return $q.reject(response.data);
             });
         }
     }
 
-    var Row = function() {
+    var Row = function(schemaName, tableName, rowData) {
+        this.schemaName = schemaName;
+        this.tableName = tableName;
+        this.data = rowData;
 
     }
 
