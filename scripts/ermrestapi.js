@@ -6,7 +6,7 @@ var ermrestApp = angular.module("ermrestApp", []);
 
 // ermrest service
 
-ermrestApp.factory("ErmrestService", ['$http', function($http) {
+ermrestApp.factory("ErmrestService", ['$http', '$q', function($http, $q) {
 
     // private properties
     var catalog;
@@ -86,7 +86,10 @@ ermrestApp.factory("ErmrestService", ['$http', function($http) {
         return table;
     }
 
+    // TODO maintain path/url for each object
+
     var Table = function(schemaName, tableName, displayName, hidden, columns) {
+        this.path = baseUrl + "/entity/" + schemaName + ":" + tableName;
         this.schemaName = schemaName;
         this.tableName = tableName;
         this.displayName = displayName;
@@ -94,8 +97,7 @@ ermrestApp.factory("ErmrestService", ['$http', function($http) {
         this.columns = columns;
 
         this.getRows = function() {
-            var path = baseUrl + "/entity/" + schemaName + ":" + tableName;
-            return $http.get(path).then(function(response) {
+            return $http.get(this.path).then(function(response) {
                 var rows = [];
                 for (var i = 0; i < response.data.length; i++) {
                     rows[i] = new Row(schemaName, tableName, response.data[i]);
@@ -106,8 +108,25 @@ ermrestApp.factory("ErmrestService", ['$http', function($http) {
             });
         }
 
-        this.getFilteredRows = function(col, value) {
-            var path = baseUrl + "/entity/" + schemaName + ":" + tableName + "/" + col + "=" + value;
+        this.getFilteredTable = function(filters) {
+            ftable = new FilteredTable(schemaName, tableName, displayName, hidden, columns, filters);
+            return ftable;
+        }
+    }
+
+    var FilteredTable = function(schemaName, tableName, displayName, hidden, columns, filters) {
+        this.schemaName = schemaName;
+        this.tableName = tableName;
+        this.displayName = displayName;
+        this.hidden = hidden;
+        this.columns = columns;
+        this.filters = filters;
+
+        this.getRows = function() {
+            var path = baseUrl + "/entity/" + schemaName + ":" + tableName;
+            for (var i = 0; i < filters.length; i++) {
+                path = path + "/" + filters[i];
+            }
             return $http.get(path).then(function(response) {
                 var rows = [];
                 for (var i = 0; i < response.data.length; i++) {
@@ -182,11 +201,18 @@ ermrestApp.controller('ermrestController1', ['ErmrestServiceFactory', function(E
                 console.log(rows);
             });
 
-            table.getFilteredRows('id', '1').then(function(rows) {
+            ft1 = table.getFilteredTable(['id=1']);
+            ft1.getRows().then(function(rows) {
+               console.log(rows);
+            });
+
+            ft2 = table.getFilteredTable(["id::gt::1", "id::lt::20"]);
+            ft2.getRows().then(function(rows) {
                 console.log(rows);
             });
 
-            table.getFilteredRows('library_type', 'biotin-labeled cRNA').then(function(rows) {
+            ft3 = table.getFilteredTable(["library_type=biotin-labeled cRNA"]);
+            ft3.getRows().then(function(rows) {
                 console.log(rows);
             });
         }
@@ -204,7 +230,8 @@ ermrestApp.controller('ermrestController2', ['ErmrestServiceFactory', function(E
             console.log("error loading table2")
         });
 
-        table.getFilteredRows('id', '1').then(function(rows) {
+        ft1 = table.getFilteredTable([["id=1"]]);
+        ft1.getRows().then(function(rows) {
             console.log(rows);
         });
     });
