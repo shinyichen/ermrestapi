@@ -28,7 +28,7 @@ ermrestApp.factory("ErmrestService", ['$http', '$q', function($http, $q) {
         var self = this;
         return $http.get(schemaPath).then(function(response) {
             // set schemas
-            self.schemas = response.data.schemas;
+            schemas = response.data.schemas;
             for (var key in self.schemas) {
                 self.schemas[key].catalog = self.catalog;
             }
@@ -41,7 +41,7 @@ ermrestApp.factory("ErmrestService", ['$http', '$q', function($http, $q) {
 
     // public getTable
     ErmrestService.prototype.getTable = function(schemaName, tableName) {
-        var tableSchema = this.schemas[schemaName].tables[tableName];
+        var tableSchema = schemas[schemaName].tables[tableName];
 
         // table display name
         var displayName = tableSchema.table_name;
@@ -80,27 +80,38 @@ ermrestApp.factory("ErmrestService", ['$http', '$q', function($http, $q) {
             columns.push(column);
         }
 
+        // primary key set
+        var keys = tableSchema.keys[0].unique_columns;
+
         // create table object
-        var table = new Table(schemaName, tableName, displayName, hidden, columns);
+        var table = new Table(schemaName, tableName, displayName, hidden, columns, keys);
 
         return table;
     }
 
     // TODO maintain path/url for each object
 
-    var Table = function(schemaName, tableName, displayName, hidden, columns) {
+    var Table = function(schemaName, tableName, displayName, hidden, columns, keys) {
         this.path = baseUrl + "/entity/" + schemaName + ":" + tableName;
         this.schemaName = schemaName;
         this.tableName = tableName;
         this.displayName = displayName;
         this.hidden = hidden;
         this.columns = columns;
+        this.keys = keys;
+        this.filters = []; // always empty
 
         this.getRows = function() {
+            var self = this;
             return $http.get(this.path).then(function(response) {
                 var rows = [];
                 for (var i = 0; i < response.data.length; i++) {
-                    rows[i] = new Row(schemaName, tableName, response.data[i]);
+                    // get primary key columns that identifies the row
+                    var ids = [];
+                    for (var j = 0; j < self.keys.length; j++) {
+                        ids[self.keys[j]] = response.data[i][self.keys[j]];
+                    }
+                    rows[i] = new Row(self, response.data[i], ids);
                 }
                 return rows;
             }, function(response) {
@@ -109,28 +120,38 @@ ermrestApp.factory("ErmrestService", ['$http', '$q', function($http, $q) {
         }
 
         this.getFilteredTable = function(filters) {
-            ftable = new FilteredTable(schemaName, tableName, displayName, hidden, columns, filters);
+            ftable = new FilteredTable(this, filters);
             return ftable;
         }
     }
 
-    var FilteredTable = function(schemaName, tableName, displayName, hidden, columns, filters) {
-        this.schemaName = schemaName;
-        this.tableName = tableName;
-        this.displayName = displayName;
-        this.hidden = hidden;
-        this.columns = columns;
-        this.filters = filters;
+    var FilteredTable = function(table, filters) {
+        this.schemaName = table.schemaName;
+        this.tableName = table.tableName;
+        this.displayName = table.displayName;
+        this.hidden = table.hidden;
+        this.columns = table.columns;
+        this.keys = table.keys;
+
+        // append filters and path
+        this.filters = table.filters;
+        this.path = table.path;
+        for (var i = 0; i < filters.length; i++) {
+            this.filters.push(filters[i]);
+            this.path = this.path + "/" + filters[i];
+        }
 
         this.getRows = function() {
-            var path = baseUrl + "/entity/" + schemaName + ":" + tableName;
-            for (var i = 0; i < filters.length; i++) {
-                path = path + "/" + filters[i];
-            }
-            return $http.get(path).then(function(response) {
+            var self = this;
+            return $http.get(this.path).then(function(response) {
                 var rows = [];
                 for (var i = 0; i < response.data.length; i++) {
-                    rows[i] = new Row(schemaName, tableName, response.data[i]);
+                    // get primary key columns that identifies the row
+                    var ids = [];
+                    for (var j = 0; j < self.keys.length; j++) {
+                        ids[self.keys[j]] = response.data[i][self.keys[j]];
+                    }
+                    rows[i] = new Row(self, response.data[i], ids);
                 }
                 return rows;
             }, function(response) {
@@ -139,11 +160,24 @@ ermrestApp.factory("ErmrestService", ['$http', '$q', function($http, $q) {
         }
     }
 
-    var Row = function(schemaName, tableName, rowData) {
-        this.schemaName = schemaName;
-        this.tableName = tableName;
-        this.data = rowData;
+    var RelatedTable = function(row, s2, t2) {
+        var row = row;
+        this.path = row.path + "/" + s2 + ":" + t2;
+    }
 
+    // ids should point to a single row
+    var Row = function(table, rowData, ids) {
+        var table = table;
+        this.data = rowData;
+        this.path = table.path;
+        for (id in ids) {
+            this.path = this.path + "/" + id + "=" + ids[id];
+        }
+
+        this.getRelatedTable = function(s2, t2) {
+            t2Schema = schemas[s2].tables[t2];
+            return new RelatedTable(this, s2, t2);
+        }
     }
 
     var Column = function(name, displayName, hidden) {
@@ -208,7 +242,9 @@ ermrestApp.controller('ermrestController1', ['ErmrestServiceFactory', function(E
 
             ft2 = table.getFilteredTable(["id::gt::1", "id::lt::20"]);
             ft2.getRows().then(function(rows) {
-                console.log(rows);
+                var table2 = rows[0].getRelatedTable("assay", "replicate");
+                console.log(table2.path);
+
             });
 
             ft3 = table.getFilteredTable(["library_type=biotin-labeled cRNA"]);
