@@ -8,16 +8,12 @@ var ermrestApp = angular.module("ermrestApp", []);
 
 ermrestApp.factory("ErmrestService", ['$http', '$q', function($http, $q) {
 
-    // private properties
-    var catalog;
-    var schemas;
-    var baseUrl;
-
     // constructor
     // cid - catalog id
     var ErmrestService = function(ermrestLoc, cid) {
         catalog = cid;
         baseUrl = ermrestLoc + '/ermrest/catalog/' + cid;
+        this.schemas;
     }
 
     ErmrestService.prototype.init = function() {
@@ -84,15 +80,16 @@ ermrestApp.factory("ErmrestService", ['$http', '$q', function($http, $q) {
         var keys = tableSchema.keys[0].unique_columns;
 
         // create table object
-        var table = new Table(schemaName, tableName, displayName, hidden, columns, keys);
+        var table = new Table(baseUrl, schemas, schemaName, tableName, displayName, hidden, columns, keys);
 
         return table;
     }
 
     // TODO maintain path/url for each object
 
-    var Table = function(schemaName, tableName, displayName, hidden, columns, keys) {
+    var Table = function(baseUrl, schemas, schemaName, tableName, displayName, hidden, columns, keys) {
         this.path = baseUrl + "/entity/" + schemaName + ":" + tableName;
+        this.schemas = schemas;
         this.schemaName = schemaName;
         this.tableName = tableName;
         this.displayName = displayName;
@@ -111,7 +108,7 @@ ermrestApp.factory("ErmrestService", ['$http', '$q', function($http, $q) {
                     for (var j = 0; j < self.keys.length; j++) {
                         ids[self.keys[j]] = response.data[i][self.keys[j]];
                     }
-                    rows[i] = new Row(self, response.data[i], ids);
+                    rows[i] = new Row(self.schemas, self, response.data[i], ids);
                 }
                 return rows;
             }, function(response) {
@@ -120,12 +117,13 @@ ermrestApp.factory("ErmrestService", ['$http', '$q', function($http, $q) {
         }
 
         this.getFilteredTable = function(filters) {
-            ftable = new FilteredTable(this, filters);
+            ftable = new FilteredTable(this.schemas, this, filters);
             return ftable;
         }
     }
 
-    var FilteredTable = function(table, filters) {
+    var FilteredTable = function(schemas, table, filters) {
+        this.schemas = schemas;
         this.schemaName = table.schemaName;
         this.tableName = table.tableName;
         this.displayName = table.displayName;
@@ -151,7 +149,7 @@ ermrestApp.factory("ErmrestService", ['$http', '$q', function($http, $q) {
                     for (var j = 0; j < self.keys.length; j++) {
                         ids[self.keys[j]] = response.data[i][self.keys[j]];
                     }
-                    rows[i] = new Row(self, response.data[i], ids);
+                    rows[i] = new Row(self.schemas, self, response.data[i], ids);
                 }
                 return rows;
             }, function(response) {
@@ -160,14 +158,16 @@ ermrestApp.factory("ErmrestService", ['$http', '$q', function($http, $q) {
         }
     }
 
-    var RelatedTable = function(row, s2, t2) {
+    var RelatedTable = function(schemas, row, s2, t2) {
         var row = row;
+        this.schemas = schemas;
         this.path = row.path + "/" + s2 + ":" + t2;
     }
 
     // ids should point to a single row
-    var Row = function(table, rowData, ids) {
+    var Row = function(schemas, table, rowData, ids) {
         var table = table;
+        this.schemas = schemas;
         this.data = rowData;
         this.path = table.path;
         for (id in ids) {
@@ -176,7 +176,7 @@ ermrestApp.factory("ErmrestService", ['$http', '$q', function($http, $q) {
 
         this.getRelatedTable = function(s2, t2) {
             t2Schema = schemas[s2].tables[t2];
-            return new RelatedTable(this, s2, t2);
+            return new RelatedTable(this.schemas, this, s2, t2);
         }
     }
 
